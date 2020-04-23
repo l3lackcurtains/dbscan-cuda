@@ -7,10 +7,10 @@
 #include <set>
 #include <vector>
 
-#define DATASET_COUNT 30000
+#define DATASET_COUNT 20000
 #define DIMENSION 2
 #define MAX_SEEDS 1024
-#define REFILL_MAX_SEEDS 2000
+#define REFILL_MAX_SEEDS 3000
 
 #define THREAD_BLOCKS 32
 #define THREAD_COUNT 128
@@ -118,10 +118,8 @@ int main() {
       exit = true;
     }
 
-    // if(unprocessedPoints.size() < 1968) break;
-
-    // printf("Number of cluster %d, unprocessed points: %d\n", clusterCount,
-    //        unprocessedPoints.size());
+    printf("Number of cluster %d, unprocessed points: %d\n", clusterCount,
+           unprocessedPoints.size());
 
     if (exit) break;
 
@@ -427,15 +425,15 @@ int importDataset(char const *fname, double **dataset) {
   while (fgets(buf, 4096, fp) && rowCnt < DATASET_COUNT) {
     colCnt = 0;
     char *field = strtok(buf, ",");
-    long double tmp;
-    sscanf(field, "%Lf", &tmp);
+    double tmp;
+    sscanf(field, "%f", &tmp);
     dataset[rowCnt][colCnt] = tmp;
     while (field) {
       colCnt++;
       field = strtok(NULL, ",");
       if (field != NULL) {
-        long double tmp;
-        sscanf(field, "%Lf", &tmp);
+        double tmp;
+        sscanf(field, "%f", &tmp);
         dataset[rowCnt][colCnt] = tmp;
       }
     }
