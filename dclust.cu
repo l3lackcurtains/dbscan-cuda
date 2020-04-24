@@ -1,24 +1,24 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-
 #include <algorithm>
 #include <map>
 #include <set>
 #include <vector>
 
+using namespace std;
+
 #define DATASET_COUNT 20000
 #define DIMENSION 2
 #define MAX_SEEDS 1024
 #define REFILL_MAX_SEEDS 3000
-
 #define THREAD_BLOCKS 32
-#define THREAD_COUNT 128
-
+#define THREAD_COUNT 256
 #define UNPROCESSED -1
 #define NOISE -2
 
-using namespace std;
+__device__ __constant__ int minPts = 4;
+__device__ __constant__ double eps = 1.5;
 
 #define gpuErrchk(ans) \
   { gpuAssert((ans), __FILE__, __LINE__); }
@@ -31,21 +31,18 @@ inline void gpuAssert(cudaError_t code, const char *file, int line,
   }
 }
 
-__device__ __constant__ int minPts = 4;
-__device__ __constant__ double eps = 1.5;
-
 __device__ double dataset[DATASET_COUNT][DIMENSION];
 __device__ int cluster[DATASET_COUNT];
 __device__ int seedList[THREAD_BLOCKS][MAX_SEEDS];
 __device__ int currentSeedLength[THREAD_BLOCKS];
-__device__ long long int refillSeedList[THREAD_BLOCKS][REFILL_MAX_SEEDS];
+__device__ long int refillSeedList[THREAD_BLOCKS][REFILL_MAX_SEEDS];
 __device__ int refillCurrentSeedLength[THREAD_BLOCKS];
 __device__ bool collisionMatrix[THREAD_BLOCKS][THREAD_BLOCKS];
 
 bool **d_collisionMatrix;
 int **d_seedList;
 int *d_currentSeedLength;
-long long int **d_refillSeedList;
+long int **d_refillSeedList;
 int *d_refillCurrentSeedLength;
 double **d_dataset;
 int *d_cluster;
@@ -89,28 +86,22 @@ int main() {
 
   gpuErrchk(cudaMemset(d_collisionMatrix, false,
                        sizeof(bool) * THREAD_BLOCKS * THREAD_BLOCKS));
-
   gpuErrchk(
       cudaMemset(d_seedList, -1, sizeof(int) * THREAD_BLOCKS * MAX_SEEDS));
-
   gpuErrchk(cudaMemset(d_currentSeedLength, 0, sizeof(int) * THREAD_BLOCKS));
-
   gpuErrchk(
       cudaMemset(d_refillSeedList, -1,
-                 sizeof(long long int) * THREAD_BLOCKS * REFILL_MAX_SEEDS));
-
+                 sizeof(long int) * THREAD_BLOCKS * REFILL_MAX_SEEDS));
   gpuErrchk(
       cudaMemset(d_refillCurrentSeedLength, 0, sizeof(int) * THREAD_BLOCKS));
-
   gpuErrchk(cudaMemset(d_cluster, UNPROCESSED, sizeof(int) * DATASET_COUNT));
-
   gpuErrchk(cudaMemcpy(d_dataset, importedDataset,
                        sizeof(double) * DATASET_COUNT * 2,
                        cudaMemcpyHostToDevice));
 
   int clusterCount = 0;
-
   bool exit = false;
+
   while (!exit) {
     bool completed = MonitorSeedPoints(unprocessedPoints, &clusterCount);
 
@@ -118,8 +109,7 @@ int main() {
       exit = true;
     }
 
-    printf("Number of cluster %d, unprocessed points: %d\n", clusterCount,
-           unprocessedPoints.size());
+    printf("Number of cluster %d, unprocessed points: %d\n", clusterCount, unprocessedPoints.size());
 
     if (exit) break;
 
@@ -130,8 +120,8 @@ int main() {
     gpuErrchk(cudaDeviceSynchronize());
   }
 
-  gpuErrchk(cudaDeviceSynchronize());
   showClusters<<<dim3(THREAD_BLOCKS, 1), dim3(THREAD_COUNT, 1)>>>();
+  gpuErrchk(cudaDeviceSynchronize());
 
   printf("Final number of cluster %d\n", clusterCount);
 }
@@ -150,9 +140,9 @@ bool MonitorSeedPoints(vector<int> &unprocessedPoints, int *clusterCount) {
                        sizeof(int) * THREAD_BLOCKS * MAX_SEEDS,
                        cudaMemcpyDeviceToHost));
 
-  long long int localRefillSeedList[THREAD_BLOCKS][REFILL_MAX_SEEDS];
+  long int localRefillSeedList[THREAD_BLOCKS][REFILL_MAX_SEEDS];
   gpuErrchk(cudaMemcpy(localRefillSeedList, d_refillSeedList,
-                       sizeof(long long int) * THREAD_BLOCKS * REFILL_MAX_SEEDS,
+                       sizeof(long int) * THREAD_BLOCKS * REFILL_MAX_SEEDS,
                        cudaMemcpyDeviceToHost));
 
   bool completeSeedListFirst = false;
@@ -184,6 +174,9 @@ bool MonitorSeedPoints(vector<int> &unprocessedPoints, int *clusterCount) {
     }
   }
 
+  
+  
+
   if (refilled) {
     gpuErrchk(cudaMemcpy(d_currentSeedLength, localSeedLength,
                          sizeof(int) * THREAD_BLOCKS, cudaMemcpyHostToDevice));
@@ -193,12 +186,15 @@ bool MonitorSeedPoints(vector<int> &unprocessedPoints, int *clusterCount) {
 
     gpuErrchk(cudaMemcpy(d_refillCurrentSeedLength, localRefillSeedLength,
                          sizeof(int) * THREAD_BLOCKS, cudaMemcpyHostToDevice));
+    printf("[REFILL_SEED] ");
     return false;
   }
 
   if (completeSeedListFirst){
+    printf("[LOAD_SEED] ");
     return false;
   }
+
   int localCluster[DATASET_COUNT];
   gpuErrchk(cudaMemcpy(localCluster, d_cluster, sizeof(int) * DATASET_COUNT,
                        cudaMemcpyDeviceToHost));
@@ -225,12 +221,9 @@ bool MonitorSeedPoints(vector<int> &unprocessedPoints, int *clusterCount) {
                        sizeof(int) * THREAD_BLOCKS * MAX_SEEDS,
                        cudaMemcpyHostToDevice));
 
-  if (unprocessedPoints.empty()) {
-    // for(int i = 0; i < DATASET_COUNT; i++) {
-    //   printf("Point %d, cluster %d\n", i, localCluster[i]);
-    // }
-  }
   if (unprocessedPoints.empty()) return true;
+
+  printf("[NEW_SEED] ");
 
   return false;
 }
@@ -377,7 +370,7 @@ __global__ void DBSCAN() {
 
   if (threadIdx.x == 0 &&
       refillCurrentSeedLength[chainID] >= REFILL_MAX_SEEDS) {
-    currentSeedLength[chainID] = REFILL_MAX_SEEDS - 1;
+    refillCurrentSeedLength[chainID] = REFILL_MAX_SEEDS - 1;
   }
 }
 
