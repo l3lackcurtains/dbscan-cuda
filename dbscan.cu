@@ -230,6 +230,8 @@ bool MonitorSeedPoints(vector<int> &unprocessedPoints, int *clusterCount,
           localSeedList[i * MAX_SEEDS + localSeedLength[i]] =
               localRefillSeedList[i * REFILL_MAX_SEEDS +
                                   localRefillSeedLength[i]];
+          localRefillSeedList[i * REFILL_MAX_SEEDS +
+                                  localRefillSeedLength[i]] = -1;
 
           localSeedLength[i] = localSeedLength[i] + 1;
         }
@@ -252,6 +254,9 @@ bool MonitorSeedPoints(vector<int> &unprocessedPoints, int *clusterCount,
 
     gpuErrchk(cudaMemcpy(d_refillSeedLength, localRefillSeedLength,
                          sizeof(int) * THREAD_BLOCKS, cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(d_refillSeedList, localRefillSeedList,
+                       sizeof(int) * THREAD_BLOCKS * REFILL_MAX_SEEDS,
+                       cudaMemcpyHostToDevice));
     return false;
   }
 
@@ -291,6 +296,11 @@ bool MonitorSeedPoints(vector<int> &unprocessedPoints, int *clusterCount,
                        sizeof(int) * THREAD_BLOCKS, cudaMemcpyHostToDevice));
   gpuErrchk(cudaMemcpy(d_seedList, localSeedList,
                        sizeof(int) * THREAD_BLOCKS * MAX_SEEDS,
+                       cudaMemcpyHostToDevice));
+  gpuErrchk(cudaMemcpy(d_refillSeedLength, localRefillSeedLength,
+                       sizeof(int) * THREAD_BLOCKS, cudaMemcpyHostToDevice));
+  gpuErrchk(cudaMemcpy(d_refillSeedList, localRefillSeedList,
+                       sizeof(int) * THREAD_BLOCKS * REFILL_MAX_SEEDS,
                        cudaMemcpyHostToDevice));
 
   if (unprocessedPoints.empty()) return true;
@@ -351,7 +361,7 @@ for (int i = 0; i < DATASET_COUNT; i++) {
 }
 
 for (int i = 0; i < localClustersList.size(); i++) {
-  if (localClustersList[i].size() < 5) continue;
+  if (localClustersList[i].size() == 0) continue;
   for (int x = 0; x < localClustersList[i].size(); x++) {
     cluster[localClustersList[i][x]] = *clusterCount + THREAD_BLOCKS + 1;
   }
@@ -410,7 +420,7 @@ __global__ void DBSCAN(float *dataset, int *cluster, int *seedList,
       point[x] = dataset[pointID * DIMENSION + x];
     }
 
-    register float distance = 0.0;
+    register float distance = 0;
     for (int x = 0; x < DIMENSION; x++) {
       distance +=
           (point[x] - comparingPoint[x]) * (point[x] - comparingPoint[x]);
@@ -420,11 +430,8 @@ __global__ void DBSCAN(float *dataset, int *cluster, int *seedList,
     if (distance <= eps) {
       register int currentNeighborCount = atomicAdd(&neighborsCount, 1);
       if (neighborsCount >= minPts) {
-        if(i != pointID) {
-          MarkAsCandidate(i, chainID, cluster, seedList, seedLength,
+        MarkAsCandidate(i, chainID, cluster, seedList, seedLength,
                         refillSeedList, refillSeedLength, collisionMatrix);
-        }
-        
       } else {
         neighbors[currentNeighborCount] = i;
       }
@@ -483,9 +490,9 @@ __device__ void MarkAsCandidate(int neighborID, int chainID, int *cluster,
 
 __global__ void showClusters(int *cluster) {
   int pointId = blockIdx.x * blockDim.x + threadIdx.x;
-  if(pointId < DATASET_COUNT && cluster[pointId] < 1) {
-    printf("Point %d: %d\n", pointId, cluster[pointId]);
-  }
+  // if(pointId < DATASET_COUNT && cluster[pointId] < 1) {
+  //   printf("Point %d: %d\n", pointId, cluster[pointId]);
+  // }
 }
 
 int ImportDataset(char const *fname, float *dataset) {
