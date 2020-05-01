@@ -12,9 +12,9 @@ using namespace std;
 #define DATASET_COUNT 100000
 #define DIMENSION 2
 #define MAX_SEEDS 1024
-#define REFILL_MAX_SEEDS 3000
+#define REFILL_MAX_SEEDS 1024
 #define THREAD_BLOCKS 64
-#define THREAD_COUNT 256
+#define THREAD_COUNT 128
 #define UNPROCESSED -1
 #define NOISE -2
 #define MINPTS 4
@@ -131,8 +131,8 @@ int main() {
       exit = true;
     }
 
-    // printf("Number of cluster %d, unprocessed points: %d\n", clusterCount,
-    //        unprocessedPoints.size());
+    printf("Number of cluster %d, unprocessed points: %d\n", clusterCount,
+           unprocessedPoints.size());
 
     if (exit) break;
 
@@ -379,7 +379,14 @@ int MonitorSeedPoints(vector<int> &unprocessedPoints, int *clusterCount,
       sabTotal += clusterCnt;
       // printf("Cluster %d has points %d\n", j - THREAD_BLOCKS, clusterCnt);
     }
-    printf("The number of clusters %d with size %d\n", *clusterCount, sabTotal);
+    int noiseCnt = 0;
+    for (int i = 0; i < DATASET_COUNT; i++) {
+      if (localCluster[i] == -2) {
+        noiseCnt++;
+      }
+    }
+    printf("The number of clusters %d with size %d and noises %d\n",
+           *clusterCount, sabTotal, noiseCnt);
   }
   // IF all points has been processed exit DBSCAN
   if (unprocessedPoints.empty()) return true;
