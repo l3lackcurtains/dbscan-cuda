@@ -84,7 +84,7 @@ int main(int argc, char **argv) {
   for (int x = 0; x < DATASET_COUNT; x++) {
     unprocessedPoints.push_back(x);
   }
-  printf("Imported %I64u data in dataset\n", unprocessedPoints.size());
+  printf("Imported %llu data in dataset\n", unprocessedPoints.size());
 
   gpuErrchk(cudaDeviceReset());
   gpuErrchk(cudaFree(0));
@@ -150,7 +150,7 @@ int main(int argc, char **argv) {
       exit = true;
     }
 
-    printf("Number of cluster %d, unprocessed points: %d\n", clusterCount,
+    printf("Number of cluster %d, unprocessed points: %llu\n", clusterCount,
            unprocessedPoints.size());
 
     if (exit) break;
