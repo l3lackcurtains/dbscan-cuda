@@ -46,11 +46,30 @@ __device__ void MarkAsCandidate(int neighborID, int chainID, int *cluster,
                                 int *seedList, int *seedLength,
                                 int *refillSeedList, int *refillSeedLength,
                                 int *collisionMatrix);
-int main() {
+int main(int argc, char **argv) {
+
+  /**
+   **************************************************************************
+   * Get the dataset file from argument and import data
+   **************************************************************************
+   */
+
+  char inputFname[500];
+  if (argc != 2) {
+    fprintf(stderr,
+            "Please provide the dataset file path in the arguments\n");
+    exit(0);
+  }
+
+  strcpy(inputFname, argv[1]);
+
+  printf("Using dataset file %s\n", inputFname);
+
+
   double *importedDataset =
       (double *)malloc(sizeof(double) * DATASET_COUNT * DIMENSION);
 
-  int ret = ImportDataset("./dataset/dataset.txt", importedDataset);
+  int ret = ImportDataset(inputFname, importedDataset);
 
   for (int i = 0; i < 2; i++) {
     printf("Sample Data %f\n", importedDataset[i]);
@@ -566,6 +585,11 @@ __device__ void MarkAsCandidate(int neighborID, int chainID, int *cluster,
   }
 }
 
+/**
+ **************************************************************************
+ * Import dataset from file.
+ **************************************************************************
+ */
 int ImportDataset(char const *fname, double *dataset) {
   FILE *fp = fopen(fname, "r");
   if (!fp) {
