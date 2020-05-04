@@ -9,7 +9,7 @@
 
 using namespace std;
 
-#define DATASET_COUNT 100000
+#define DATASET_COUNT 10000
 #define DIMENSION 2
 #define MAX_SEEDS 1024
 #define REFILL_MAX_SEEDS 1024
@@ -171,6 +171,19 @@ int main(int argc, char **argv) {
    */
 
   printf("Final number of cluster %d\n", clusterCount);
+
+  /**
+   **************************************************************************
+   * Free memory allocations
+   **************************************************************************
+   */
+  cudaFree(d_dataset);
+  cudaFree(d_cluster);
+  cudaFree(d_seedList);
+  cudaFree(d_seedLength);
+  cudaFree(d_refillSeedList);
+  cudaFree(d_refillSeedLength);
+  cudaFree(d_collisionMatrix);
 }
 
 int MonitorSeedPoints(vector<int> &unprocessedPoints, int *clusterCount,
@@ -203,20 +216,6 @@ int MonitorSeedPoints(vector<int> &unprocessedPoints, int *clusterCount,
       (int *)malloc(sizeof(int) * THREAD_BLOCKS * REFILL_MAX_SEEDS);
   gpuErrchk(cudaMemcpy(localRefillSeedList, d_refillSeedList,
                        sizeof(int) * THREAD_BLOCKS * REFILL_MAX_SEEDS,
-                       cudaMemcpyDeviceToHost));
-
-  int *localCluster;
-  localCluster = (int *)malloc(sizeof(int) * DATASET_COUNT);
-
-  gpuErrchk(cudaMemcpy(localCluster, d_cluster, sizeof(int) * DATASET_COUNT,
-                       cudaMemcpyDeviceToHost));
-
-  int *localCollisionMatrix;
-  localCollisionMatrix =
-      (int *)malloc(sizeof(int) * THREAD_BLOCKS * THREAD_BLOCKS);
-
-  gpuErrchk(cudaMemcpy(localCollisionMatrix, d_collisionMatrix,
-                       sizeof(int) * THREAD_BLOCKS * THREAD_BLOCKS,
                        cudaMemcpyDeviceToHost));
 
   /**
@@ -264,6 +263,10 @@ int MonitorSeedPoints(vector<int> &unprocessedPoints, int *clusterCount,
    */
 
   if (completeSeedListFirst) {
+    free(localSeedList);
+    free(localRefillSeedList);
+    free(localSeedLength);
+    free(localRefillSeedLength);
     return false;
   }
 
@@ -282,8 +285,34 @@ int MonitorSeedPoints(vector<int> &unprocessedPoints, int *clusterCount,
 
     gpuErrchk(cudaMemcpy(d_refillSeedLength, localRefillSeedLength,
                          sizeof(int) * THREAD_BLOCKS, cudaMemcpyHostToDevice));
+
+    free(localSeedList);
+    free(localRefillSeedList);
+    free(localSeedLength);
+    free(localRefillSeedLength);
+
     return false;
   }
+
+  /**
+   **************************************************************************
+   * Define and copy GPU variables to CPU variables
+   **************************************************************************
+   */
+
+  int *localCluster;
+  localCluster = (int *)malloc(sizeof(int) * DATASET_COUNT);
+
+  gpuErrchk(cudaMemcpy(localCluster, d_cluster, sizeof(int) * DATASET_COUNT,
+                       cudaMemcpyDeviceToHost));
+
+  int *localCollisionMatrix;
+  localCollisionMatrix =
+      (int *)malloc(sizeof(int) * THREAD_BLOCKS * THREAD_BLOCKS);
+
+  gpuErrchk(cudaMemcpy(localCollisionMatrix, d_collisionMatrix,
+                       sizeof(int) * THREAD_BLOCKS * THREAD_BLOCKS,
+                       cudaMemcpyDeviceToHost));
 
   /**
    **************************************************************************
@@ -293,7 +322,7 @@ int MonitorSeedPoints(vector<int> &unprocessedPoints, int *clusterCount,
    **************************************************************************
    */
 
-  // printf("New Seed\n");
+  
 
   map<int, int> clusterMap;
   set<int> blockSet;
@@ -386,6 +415,13 @@ int MonitorSeedPoints(vector<int> &unprocessedPoints, int *clusterCount,
   gpuErrchk(cudaMemset(d_collisionMatrix, -1,
                        sizeof(int) * THREAD_BLOCKS * THREAD_BLOCKS));
 
+  free(localCluster);
+  free(localSeedList);
+  free(localRefillSeedList);
+  free(localSeedLength);
+  free(localRefillSeedLength);
+  free(localCollisionMatrix);
+
   if (unprocessedPoints.empty()) {
     int sabTotal = 0;
     for (int j = THREAD_BLOCKS + 1; j <= *(clusterCount) + THREAD_BLOCKS; j++) {
@@ -407,6 +443,7 @@ int MonitorSeedPoints(vector<int> &unprocessedPoints, int *clusterCount,
     printf("The number of clusters %d with size %d and noises %d\n",
            *clusterCount, sabTotal, noiseCnt);
   }
+
   // IF all points has been processed exit DBSCAN
   if (unprocessedPoints.empty()) return true;
 
