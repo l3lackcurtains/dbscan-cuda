@@ -747,6 +747,7 @@ void GetDbscanResult(double *d_dataset, int *d_cluster, int *runningCluster,
 * 2) It expands the points by finding neighbors points
 * 3) Checks for the collision and mark the collision in collision matrix
 //////////////////////////////////////////////////////////////////////////
+**************************************************************************
 */
 __global__ void DBSCAN(double *dataset, int *cluster, int *seedList,
                        int *seedLength, int *refillSeedList,
@@ -900,6 +901,7 @@ __global__ void DBSCAN(double *dataset, int *cluster, int *seedList,
 * 5) If the old state is greater than THREAD BLOCK, record the collision
 * in extra collision
 //////////////////////////////////////////////////////////////////////////
+**************************************************************************
 */
 
 __device__ void MarkAsCandidate(int neighborID, int chainID, int *cluster,
@@ -985,6 +987,7 @@ __device__ void MarkAsCandidate(int neighborID, int chainID, int *cluster,
 * Import Dataset
 * It imports the data from the file and store in dataset variable
 //////////////////////////////////////////////////////////////////////////
+**************************************************************************
 */
 int ImportDataset(char const *fname, double *dataset) {
   FILE *fp = fopen(fname, "r");
