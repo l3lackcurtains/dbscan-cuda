@@ -3,6 +3,8 @@
 #include <time.h>
 
 #include <algorithm>
+#include <ctime>
+#include <fstream>
 #include <map>
 #include <set>
 #include <vector>
@@ -72,11 +74,13 @@ inline void gpuAssert(cudaError_t code, const char *file, int line,
 int ImportDataset(char const *fname, double *dataset);
 
 bool MonitorSeedPoints(vector<int> &unprocessedPoints, int *runningCluster,
-                       int *clusterCount, int *noiseCount, int *d_cluster,
-                       int *d_seedList, int *d_seedLength,
+                       int *d_cluster, int *d_seedList, int *d_seedLength,
                        int *d_refillSeedList, int *d_refillSeedLength,
                        int *d_collisionMatrix, int *d_extraCollision,
                        int *d_extraCollisionLength);
+
+void GetDbscanResult(double *d_dataset, int *d_cluster, int *runningCluster,
+                     int *clusterCount, int *noiseCount);
 
 __global__ void DBSCAN(double *dataset, int *cluster, int *seedList,
                        int *seedLength, int *refillSeedList,
@@ -210,6 +214,22 @@ int main(int argc, char **argv) {
   gpuErrchk(cudaMemset(d_extraCollisionLength, 0, sizeof(int) * THREAD_BLOCKS));
 
   /**
+  **************************************************************************
+  * Cuda and CPU performance metrics
+  **************************************************************************
+  */
+
+  float gpuTime = 0, cpuTime = 0;
+
+  // cuda time event
+  cudaEvent_t gpuStart, gpuStop;
+  gpuErrchk(cudaEventCreate(&gpuStart));
+  gpuErrchk(cudaEventCreate(&gpuStop));
+
+  clock_t totalTimeStart, totalTimeStop;
+  float totalTime = 0.0;
+
+  /**
    **************************************************************************
    * Start the DBSCAN algorithm
    **************************************************************************
@@ -227,13 +247,14 @@ int main(int argc, char **argv) {
   // Handler to conmtrol the while loop
   bool exit = false;
 
+  totalTimeStart = clock();
+
   while (!exit) {
     // Monitor the seed list and return the comptetion status of points
     int completed = MonitorSeedPoints(
-        unprocessedPoints, &runningCluster, &clusterCount, &noiseCount,
-        d_cluster, d_seedList, d_seedLength, d_refillSeedList,
-        d_refillSeedLength, d_collisionMatrix, d_extraCollision,
-        d_extraCollisionLength);
+        unprocessedPoints, &runningCluster, d_cluster, d_seedList, d_seedLength,
+        d_refillSeedList, d_refillSeedLength, d_collisionMatrix,
+        d_extraCollision, d_extraCollisionLength);
 
     printf("Running cluster %d, unprocessed points: %lu\n", runningCluster,
            unprocessedPoints.size());
@@ -242,7 +263,10 @@ int main(int argc, char **argv) {
     if (completed) {
       exit = true;
     }
+
     if (exit) break;
+
+    gpuErrchk(cudaEventRecord(gpuStart, 0));
 
     // Kernel function to expand the seed list
     gpuErrchk(cudaDeviceSynchronize());
@@ -251,6 +275,15 @@ int main(int argc, char **argv) {
         d_refillSeedLength, d_collisionMatrix, d_extraCollision,
         d_extraCollisionLength);
     gpuErrchk(cudaDeviceSynchronize());
+
+    gpuErrchk(cudaEventRecord(gpuStop, 0));
+    cudaEventSynchronize(gpuStop);
+
+    gpuErrchk(cudaEventSynchronize(gpuStop));
+
+    float time = 0.0;
+    gpuErrchk(cudaEventElapsedTime(&time, gpuStart, gpuStop));
+    gpuTime += time / 1000;
   }
 
   /**
@@ -259,8 +292,25 @@ int main(int argc, char **argv) {
    **************************************************************************
    */
 
+  // Time measurement
+  totalTimeStop = clock();
+  totalTime = (totalTimeStop - totalTimeStart) / (float)1000;
+  cpuTime = totalTime - gpuTime;
+
+  printf("==============================================\n");
+  printf("Overall Time: %3.2f seconds\n", totalTime);
+  printf("GPU Only Time: %3.2f seconds\n", gpuTime);
+  printf("CPU Only Time: %3.2f seconds\n", cpuTime);
+  printf("==============================================\n");
+
+  // Get the DBSCAN result
+  GetDbscanResult(d_dataset, d_cluster, &runningCluster, &clusterCount,
+                  &noiseCount);
+
+  printf("==============================================\n");
   printf("Final cluster after merging: %d\n", clusterCount);
   printf("Number of noises: %d\n", noiseCount);
+  printf("==============================================\n");
 
   /**
    **************************************************************************
@@ -276,6 +326,8 @@ int main(int argc, char **argv) {
   cudaFree(d_collisionMatrix);
   cudaFree(d_extraCollision);
   cudaFree(d_extraCollisionLength);
+  cudaFree(gpuStart);
+  cudaFree(gpuStop);
 }
 
 /**
@@ -295,8 +347,7 @@ int main(int argc, char **argv) {
 **************************************************************************
 */
 bool MonitorSeedPoints(vector<int> &unprocessedPoints, int *runningCluster,
-                       int *clusterCount, int *noiseCount, int *d_cluster,
-                       int *d_seedList, int *d_seedLength,
+                       int *d_cluster, int *d_seedList, int *d_seedLength,
                        int *d_refillSeedList, int *d_refillSeedLength,
                        int *d_collisionMatrix, int *d_extraCollision,
                        int *d_extraCollisionLength) {
@@ -545,7 +596,7 @@ bool MonitorSeedPoints(vector<int> &unprocessedPoints, int *runningCluster,
   for (int i = 0; i < clustersList.size(); i++) {
     if (clustersList[i].size() == 0) continue;
     for (int x = 0; x < clustersList[i].size(); x++) {
-      localCluster[clustersList[i][x]] = *runningCluster + THREAD_BLOCKS + 1;
+      localCluster[clustersList[i][x]] = *runningCluster + THREAD_BLOCKS;
     }
     (*runningCluster)++;
   }
@@ -594,38 +645,6 @@ bool MonitorSeedPoints(vector<int> &unprocessedPoints, int *runningCluster,
   gpuErrchk(cudaMemset(d_extraCollisionLength, 0, sizeof(int) * THREAD_BLOCKS));
 
   /**
-  **************************************************************************
-  * If all the points are processed then, print the cluster and noise
-  * results
-  **************************************************************************
-  */
-
-  if (unprocessedPoints.empty()) {
-    int localClusterCount = 0;
-    int localNoiseCount = 0;
-    for (int i = THREAD_BLOCKS + 1; i < (*runningCluster) + THREAD_BLOCKS + 1;
-         i++) {
-      bool found = false;
-      for (int j = 0; j < DATASET_COUNT; j++) {
-        if (localCluster[j] == i) {
-          found = true;
-          break;
-        }
-      }
-      if (found) {
-        localClusterCount++;
-      }
-    }
-    for (int j = 0; j < DATASET_COUNT; j++) {
-      if (localCluster[j] == NOISE) {
-        localNoiseCount++;
-      }
-    }
-    *clusterCount = localClusterCount;
-    *noiseCount = localNoiseCount;
-  }
-
-  /**
    **************************************************************************
    * Free CPU memory allocations
    **************************************************************************
@@ -643,6 +662,79 @@ bool MonitorSeedPoints(vector<int> &unprocessedPoints, int *runningCluster,
   if (unprocessedPoints.empty()) return true;
 
   return false;
+}
+
+/**
+**************************************************************************
+//////////////////////////////////////////////////////////////////////////
+* Get DBSCAN result
+* Get the final cluster and print the overall result
+//////////////////////////////////////////////////////////////////////////
+**************************************************************************
+*/
+void GetDbscanResult(double *d_dataset, int *d_cluster, int *runningCluster,
+                     int *clusterCount, int *noiseCount) {
+  /**
+  **************************************************************************
+  * Print the cluster and noise results
+  **************************************************************************
+  */
+
+  int *localCluster;
+  localCluster = (int *)malloc(sizeof(int) * DATASET_COUNT);
+  gpuErrchk(cudaMemcpy(localCluster, d_cluster, sizeof(int) * DATASET_COUNT,
+                       cudaMemcpyDeviceToHost));
+
+  double *dataset;
+  dataset = (double *)malloc(sizeof(double) * DATASET_COUNT * DIMENSION);
+  gpuErrchk(cudaMemcpy(dataset, d_dataset,
+                       sizeof(double) * DATASET_COUNT * DIMENSION,
+                       cudaMemcpyDeviceToHost));
+
+  map<int, int> finalClusterMap;
+  int localClusterCount = 0;
+  int localNoiseCount = 0;
+  for (int i = THREAD_BLOCKS; i <= (*runningCluster) + THREAD_BLOCKS; i++) {
+    bool found = false;
+    for (int j = 0; j < DATASET_COUNT; j++) {
+      if (localCluster[j] == i) {
+        found = true;
+        break;
+      }
+    }
+    if (found) {
+      ++localClusterCount;
+      finalClusterMap[i] = localClusterCount;
+    }
+  }
+  for (int j = 0; j < DATASET_COUNT; j++) {
+    if (localCluster[j] == NOISE) {
+      localNoiseCount++;
+    }
+  }
+  *clusterCount = localClusterCount;
+  *noiseCount = localNoiseCount;
+
+  // Output to file
+  ofstream outputFile;
+  outputFile.open("gpu_dbscan_output.txt");
+
+  for (int j = 0; j < DATASET_COUNT; j++) {
+    if (finalClusterMap[localCluster[j]] > 0) {
+      localCluster[j] = finalClusterMap[localCluster[j]];
+    } else {
+      localCluster[j] = -1;
+    }
+  }
+
+  for (int j = 0; j < DATASET_COUNT; j++) {
+    outputFile << localCluster[j] << ", " << dataset[j * DIMENSION] << ", "
+               << dataset[j * DIMENSION + 1] << endl;
+  }
+
+  outputFile.close();
+
+  free(localCluster);
 }
 
 /**
@@ -869,7 +961,7 @@ __device__ void MarkAsCandidate(int neighborID, int chainID, int *cluster,
    * If the old state is greater than thread block, record the extra collisions
    **************************************************************************
    */
-  
+
   else if (oldState >= THREAD_BLOCKS) {
     register int cl = atomicAdd(&(extraCollisionLength[chainID]), 1);
     extraCollision[chainID * EXTRA_COLLISION_SIZE + cl] = oldState;
