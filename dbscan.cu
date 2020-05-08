@@ -294,7 +294,7 @@ int main(int argc, char **argv) {
 
   // Time measurement
   totalTimeStop = clock();
-  totalTime = (totalTimeStop - totalTimeStart) / (float)1000;
+  totalTime = (float)(totalTimeStop - totalTimeStart) / CLOCKS_PER_SEC;
   cpuTime = totalTime - gpuTime;
 
   printf("==============================================\n");
