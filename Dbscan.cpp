@@ -94,7 +94,7 @@ int main(int, char **) {
 
   totalTimeStop = clock();
 
-  totalTime = (totalTimeStop - totalTimeStart) / (float)1000;
+  totalTime = (float)(totalTimeStop - totalTimeStart) / CLOCKS_PER_SEC;
 
   printf("==============================================\n");
   printf("Total Time: %3.2f seconds\n", totalTime);
