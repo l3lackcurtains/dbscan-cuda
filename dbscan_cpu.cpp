@@ -71,14 +71,25 @@ class DBSCAN {
   void results();
 };
 
-int main(int, char **) {
+int main(int argc, char **argv) {
+
+  char inputFname[500];
+  if (argc != 2) {
+    fprintf(stderr, "Please provide the dataset file path in the arguments\n");
+    exit(0);
+  }
+
+  // Get the dataset file name from argument
+  strcpy(inputFname, argv[1]);
+  printf("Using dataset file %s\n", inputFname);
+
   double **dataset =
       (double **)malloc(sizeof(double *) * DATASET_SIZE);
   for (long int i = 0; i < DATASET_SIZE; i++) {
     dataset[i] = (double *)malloc(sizeof(double) * DIMENTION);
   }
 
-  importDataset("./dataset/dataset.txt", DATASET_SIZE, dataset);
+  importDataset(inputFname, DATASET_SIZE, dataset);
 
   // Start the time
   clock_t totalTimeStart, totalTimeStop;
