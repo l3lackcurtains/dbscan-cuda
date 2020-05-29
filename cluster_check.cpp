@@ -10,7 +10,7 @@
 #include <set>
 #include <vector>
 
-#define DATASET_SIZE 10000
+#define DATASET_SIZE 1000
 
 using namespace std;
 
@@ -33,6 +33,7 @@ int main() {
     cls1.push_back(clusterData1[i]);
     cls2.push_back(clusterData2[i]);
   }
+  
   DetermineErrorTwoClusterResults(&cls1, &cls2);
 
 
