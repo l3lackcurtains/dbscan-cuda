@@ -134,7 +134,7 @@ int main(int argc, char **argv) {
 
   // Get the total count of dataset
   vector<int> unprocessedPoints;
-  for (int x = 0; x < DATASET_COUNT; x++) {
+  for (int x = DATASET_COUNT - 1; x >= 0; x--) {
     unprocessedPoints.push_back(x);
   }
 
@@ -238,8 +238,8 @@ int main(int argc, char **argv) {
         d_refillSeedList, d_refillSeedLength, d_collisionMatrix,
         d_extraCollision, d_extraCollisionLength);
 
-    printf("Running cluster %d, unprocessed points: %lu\n", runningCluster,
-           unprocessedPoints.size());
+    // printf("Running cluster %d, unprocessed points: %lu\n", runningCluster,
+    //        unprocessedPoints.size());
 
     // If all points are processed, exit
     if (completed) {
@@ -667,6 +667,7 @@ void GetDbscanResult(double *d_dataset, int *d_cluster, int *runningCluster,
   }
   for (int j = 0; j < DATASET_COUNT; j++) {
     if (localCluster[j] == NOISE) {
+      localCluster[j] = 0;
       localNoiseCount++;
     }
   }
@@ -681,13 +682,12 @@ void GetDbscanResult(double *d_dataset, int *d_cluster, int *runningCluster,
     if (finalClusterMap[localCluster[j]] > 0) {
       localCluster[j] = finalClusterMap[localCluster[j]];
     } else {
-      localCluster[j] = -1;
+      localCluster[j] = 0;
     }
   }
 
   for (int j = 0; j < DATASET_COUNT; j++) {
-    outputFile << localCluster[j] << ", " << dataset[j * DIMENSION] << ", "
-               << dataset[j * DIMENSION + 1] << endl;
+    outputFile <<localCluster[j]<< endl;
   }
 
   outputFile.close();

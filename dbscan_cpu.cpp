@@ -11,7 +11,7 @@
 #include <vector>
 
 // #define DATASET_SIZE 1864620
-#define DATASET_SIZE 10000
+#define DATASET_SIZE 100000
 #define DIMENTION 2
 #define ELIPSON 1.5
 #define MIN_POINTS 4
@@ -203,6 +203,7 @@ void DBSCAN::results() {
   int noises = 0;
   for (int i = 0; i < DATASET_SIZE; i++) {
     if (clusters[i] == -1) {
+      clusters[i] = 0;
       noises++;
     }
   }
@@ -214,8 +215,7 @@ void DBSCAN::results() {
   outputFile.open("cpu_dbscan_output.txt");
 
   for (int j = 0; j < DATASET_SIZE; j++) {
-    outputFile << clusters[j] << ", " << dataset[j][0] << ", "
-               << dataset[j][1] << endl;
+    outputFile << clusters[j] << endl;
   }
 
   outputFile.close();
