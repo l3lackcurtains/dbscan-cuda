@@ -13,8 +13,8 @@ using namespace std;
 
 // Number of data in dataset to use
 
-#define DATASET_COUNT 100000
-// #define DATASET_COUNT 1864620
+// #define DATASET_COUNT 100000
+#define DATASET_COUNT 1864620
 
 // Dimension of the dataset
 #define DIMENSION 2
@@ -29,7 +29,7 @@ using namespace std;
 #define EXTRA_COLLISION_SIZE 256
 
 // Number of blocks
-#define THREAD_BLOCKS 64
+#define THREAD_BLOCKS 16
 
 // Number of threads per block
 #define THREAD_COUNT 1024
