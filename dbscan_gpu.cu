@@ -1,5 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <thrust/device_vector.h>
+#include <thrust/execution_policy.h>
+#include <thrust/host_vector.h>
+#include <thrust/sort.h>
 #include <time.h>
 
 #include <algorithm>
@@ -13,8 +17,8 @@ using namespace std;
 
 // Number of data in dataset to use
 
-// #define DATASET_COUNT 100000
-#define DATASET_COUNT 1864620
+#define DATASET_COUNT 10000
+// #define DATASET_COUNT 1864620
 
 // Dimension of the dataset
 #define DIMENSION 2
@@ -29,10 +33,10 @@ using namespace std;
 #define EXTRA_COLLISION_SIZE 256
 
 // Number of blocks
-#define THREAD_BLOCKS 16
+#define THREAD_BLOCKS 64
 
 // Number of threads per block
-#define THREAD_COUNT 1024
+#define THREAD_COUNT 512
 
 // Status of points that are not clusterized
 #define UNPROCESSED -1
@@ -67,21 +71,40 @@ inline void gpuAssert(cudaError_t code, const char *file, int line,
 /**
 **************************************************************************
 //////////////////////////////////////////////////////////////////////////
+* Tuple comparision functor for sorting dataset
+//////////////////////////////////////////////////////////////////////////
+**************************************************************************
+*/
+struct TupleComp {
+  __host__ __device__ bool operator()(const thrust::tuple<double, double> &t1,
+                                      const thrust::tuple<double, double> &t2) {
+    if (t1.get<0>() < t2.get<0>()) return true;
+    if (t1.get<0>() > t2.get<0>()) return false;
+    return t1.get<1>() < t2.get<1>();
+  }
+};
+
+/**
+**************************************************************************
+//////////////////////////////////////////////////////////////////////////
 * Declare CPU and GPU Functions
 //////////////////////////////////////////////////////////////////////////
 **************************************************************************
 */
 int ImportDataset(char const *fname, double *dataset);
 
+void datasetPreprocessing(double *h_dataset);
+
 bool MonitorSeedPoints(vector<int> &unprocessedPoints, int *runningCluster,
                        int *d_cluster, int *d_seedList, int *d_seedLength,
                        int *d_refillSeedList, int *d_refillSeedLength,
                        int *d_collisionMatrix, int *d_extraCollision,
                        int *d_extraCollisionLength, float *collisionMatrixTime,
-                       float *extraCollisionMatrixTime, float * seedListManagementTime);
+                       float *extraCollisionMatrixTime,
+                       float *seedListManagementTime);
 
 void GetDbscanResult(double *d_dataset, int *d_cluster, int *runningCluster,
-                      int *clusterCount, int *noiseCount);
+                     int *clusterCount, int *noiseCount);
 
 __global__ void DBSCAN(double *dataset, int *cluster, int *seedList,
                        int *seedLength, int *refillSeedList,
@@ -129,9 +152,12 @@ int main(int argc, char **argv) {
   }
 
   // Check if the data parsed is correct
-  for (int i = 0; i < 2; i++) {
+  for (int i = 0; i < 4; i++) {
     printf("Sample Data %f\n", importedDataset[i]);
   }
+
+  // Dataset preprocessing
+  datasetPreprocessing(importedDataset);
 
   // Get the total count of dataset
   vector<int> unprocessedPoints;
@@ -139,7 +165,7 @@ int main(int argc, char **argv) {
     unprocessedPoints.push_back(x);
   }
 
-  printf("Imported %lu data in dataset\n", unprocessedPoints.size());
+  printf("Preprocessed %lu data in dataset\n", unprocessedPoints.size());
 
   // Reset the GPU device for potential memory issues
   gpuErrchk(cudaDeviceReset());
@@ -255,8 +281,7 @@ int main(int argc, char **argv) {
   totalTimeStart = clock();
 
   while (!exit) {
-
-   // Monitor the seed list and return the comptetion status of points
+    // Monitor the seed list and return the comptetion status of points
     int completed = MonitorSeedPoints(
         unprocessedPoints, &runningCluster, d_cluster, d_seedList, d_seedLength,
         d_refillSeedList, d_refillSeedLength, d_collisionMatrix,
@@ -301,8 +326,8 @@ int main(int argc, char **argv) {
   totalTimeStop = clock();
   totalTime = (float)(totalTimeStop - totalTimeStart) / CLOCKS_PER_SEC;
   cpuTime = totalTime - gpuTime;
-  communicationTime =
-      cpuTime - collisionMatrixTime - extraCollisionMatrixTime - seedListManagementTime;
+  communicationTime = cpuTime - collisionMatrixTime - extraCollisionMatrixTime -
+                      seedListManagementTime;
 
   printf("==============================================\n");
   printf("Overall Time: %3.2f seconds\n", totalTime);
@@ -310,7 +335,8 @@ int main(int argc, char **argv) {
   printf("CPU Only Time: %3.2f seconds\n", cpuTime);
   printf("Seed management time: %3.2f seconds\n", seedListManagementTime);
   printf("Collision Matrix time: %3.2f seconds\n", collisionMatrixTime);
-  printf("Extra Collision Matrix time: %3.2f seconds\n", extraCollisionMatrixTime);
+  printf("Extra Collision Matrix time: %3.2f seconds\n",
+         extraCollisionMatrixTime);
   printf("Communication time: %3.2f seconds\n", communicationTime);
   printf("==============================================\n");
 
@@ -341,6 +367,57 @@ int main(int argc, char **argv) {
   cudaFree(gpuStop);
 }
 
+void datasetPreprocessing(double *h_dataset) {
+  /**
+   **************************************************************************
+   * Dataset preprocessing
+   **************************************************************************
+   */
+
+  double dataset_tuple_x[DATASET_COUNT];
+  double dataset_tuple_y[DATASET_COUNT];
+  for (int i = 0; i < DATASET_COUNT; i++) {
+    dataset_tuple_x[i] = h_dataset[i * DIMENSION];
+    dataset_tuple_y[i] = h_dataset[i * DIMENSION + 1];
+  }
+
+  double *d_dataset_tuple1;
+  gpuErrchk(cudaMalloc(&d_dataset_tuple1, DATASET_COUNT * sizeof(double)));
+
+  double *d_dataset_tuple2;
+  gpuErrchk(cudaMalloc(&d_dataset_tuple2, DATASET_COUNT * sizeof(double)));
+
+  gpuErrchk(cudaMemcpy(d_dataset_tuple1, dataset_tuple_x,
+                       DATASET_COUNT * sizeof(double), cudaMemcpyHostToDevice));
+  gpuErrchk(cudaMemcpy(d_dataset_tuple2, dataset_tuple_y,
+                       DATASET_COUNT * sizeof(double), cudaMemcpyHostToDevice));
+
+  thrust::device_ptr<double> dev_ptr_vector1 =
+      thrust::device_pointer_cast(d_dataset_tuple1);
+  thrust::device_ptr<double> dev_ptr_vector2 =
+      thrust::device_pointer_cast(d_dataset_tuple2);
+
+  auto begin = thrust::make_zip_iterator(
+      thrust::make_tuple(dev_ptr_vector1, dev_ptr_vector2));
+  auto end = thrust::make_zip_iterator(thrust::make_tuple(
+      dev_ptr_vector1 + DATASET_COUNT, dev_ptr_vector2 + DATASET_COUNT));
+
+  thrust::sort(begin, end, TupleComp());
+
+  double *h_vector1_output = (double *)malloc(DATASET_COUNT * sizeof(double));
+  double *h_vector2_output = (double *)malloc(DATASET_COUNT * sizeof(double));
+
+  gpuErrchk(cudaMemcpy(h_vector1_output, d_dataset_tuple1,
+                       DATASET_COUNT * sizeof(double), cudaMemcpyDeviceToHost));
+  gpuErrchk(cudaMemcpy(h_vector2_output, d_dataset_tuple2,
+                       DATASET_COUNT * sizeof(double), cudaMemcpyDeviceToHost));
+
+  for (int i = 0; i < DATASET_COUNT; i++) {
+    h_dataset[i * DIMENSION] = h_vector1_output[i];
+    h_dataset[i * DIMENSION + 1] = h_vector2_output[i];
+  }
+}
+
 /**
 **************************************************************************
 //////////////////////////////////////////////////////////////////////////
@@ -357,12 +434,14 @@ int main(int argc, char **argv) {
 //////////////////////////////////////////////////////////////////////////
 **************************************************************************
 */
+
 bool MonitorSeedPoints(vector<int> &unprocessedPoints, int *runningCluster,
                        int *d_cluster, int *d_seedList, int *d_seedLength,
                        int *d_refillSeedList, int *d_refillSeedLength,
                        int *d_collisionMatrix, int *d_extraCollision,
                        int *d_extraCollisionLength, float *collisionMatrixTime,
-                       float *extraCollisionMatrixTime, float * seedListManagementTime) {
+                       float *extraCollisionMatrixTime,
+                       float *seedListManagementTime) {
   /**
    **************************************************************************
    * Copy GPU variables content to CPU variables for seed list management
@@ -513,6 +592,7 @@ bool MonitorSeedPoints(vector<int> &unprocessedPoints, int *runningCluster,
    * between chains and finalize the clusters
    **************************************************************************
    */
+
   // Start collision Matrix time
   float startCollisionMatrixTime = clock();
 
@@ -783,7 +863,7 @@ void GetDbscanResult(double *d_dataset, int *d_cluster, int *runningCluster,
   }
 
   for (int j = 0; j < DATASET_COUNT; j++) {
-    outputFile <<localCluster[j]<< endl;
+    outputFile << localCluster[j] << endl;
   }
 
   outputFile.close();
