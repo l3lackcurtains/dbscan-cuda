@@ -11,7 +11,8 @@
 #include <set>
 #include <vector>
 
-#define DATASET_SIZE 10000
+#define DATASET_COUNT DATASET_COUNT00
+#define DIMENSION 2
 
 using namespace std;
 
@@ -32,7 +33,7 @@ int main() {
   dataset[7] = 31.21;
   dataset[8] = 145.14;
   dataset[9] = 45.42;
-  dataset[10] = 132.42;
+  dataset[DATASET_COUNT] = 132.42;
   dataset[11] = 11.21;
   dataset[12] = 111.12;
   dataset[13] = 45.4;
@@ -44,40 +45,40 @@ int main() {
   dataset[19] = 35.21;
 
   printf("Original dataset\n");
-  for (int i = 0; i < 10; i++) {
-    for (int j = 0; j < 2; j++) {
-      printf("%f ", dataset[i * 2 + j]);
+  for (int i = 0; i < DATASET_COUNT; i++) {
+    for (int j = 0; j < DIMENSION; j++) {
+      printf("%f ", dataset[i * DIMENSION + j]);
     }
     printf("\n");
   }
 
-  for (int i = 0; i < 10; i++) {
-    for (int j = 0; j < 10; j++) {
-      if (dataset[i * 2] > dataset[j * 2]) {
-        for (int x = 0; x < 2; x++) {
-          double temp = dataset[i * 2 + x];
-          dataset[i * 2 + x] = dataset[j * 2 + x];
-          dataset[j * 2 + x] = temp;
+  for (int i = 0; i < DATASET_COUNT; i++) {
+    for (int j = 0; j < DATASET_COUNT; j++) {
+      if (dataset[i * DIMENSION] > dataset[j * DIMENSION]) {
+        for (int x = 0; x < DIMENSION; x++) {
+          double temp = dataset[i * DIMENSION + x];
+          dataset[i * DIMENSION + x] = dataset[j * DIMENSION + x];
+          dataset[j * DIMENSION + x] = temp;
         }
       }
     }
   }
-  // Sorting in 2 dimension.
-  for (int i = 0; i < 10; i++) {
-    for (int j = 0; j < 10; j++) {
-      if (dataset[i * 2] == dataset[j * 2] &&
-          dataset[i * 2 + 1] > dataset[j * 2 + 1]) {
-        for (int x = 0; x < 2; x++) {
-          double temp = dataset[i * 2 + x];
-          dataset[i * 2 + x] = dataset[j * 2 + x];
-          dataset[j * 2 + x] = temp;
+  // Sorting in DIMENSION dimension.
+  for (int i = 0; i < DATASET_COUNT; i++) {
+    for (int j = 0; j < DATASET_COUNT; j++) {
+      if (dataset[i * DIMENSION] == dataset[j * DIMENSION] &&
+          dataset[i * DIMENSION + 1] > dataset[j * DIMENSION + 1]) {
+        for (int x = 0; x < DIMENSION; x++) {
+          double temp = dataset[i * DIMENSION + x];
+          dataset[i * DIMENSION + x] = dataset[j * DIMENSION + x];
+          dataset[j * DIMENSION + x] = temp;
         }
       }
     }
   }
 
   printf("After sorting dataset\n");
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < DATASET_COUNT; i++) {
     for (int j = 0; j < 2; j++) {
       printf("%f ", dataset[i * 2 + j]);
     }

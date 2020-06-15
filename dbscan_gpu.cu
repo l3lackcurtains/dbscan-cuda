@@ -17,8 +17,8 @@ using namespace std;
 
 // Number of data in dataset to use
 
-#define DATASET_COUNT 10000
-// #define DATASET_COUNT 1864620
+// #define DATASET_COUNT 1000
+#define DATASET_COUNT 1864620
 
 // Dimension of the dataset
 #define DIMENSION 2
@@ -93,7 +93,9 @@ struct TupleComp {
 */
 int ImportDataset(char const *fname, double *dataset);
 
-void datasetPreprocessing(double *h_dataset);
+void gpuDatasetPreprocessing(double *h_dataset);
+
+void cpuDatasetPreprocessing(double *h_dataset);
 
 bool MonitorSeedPoints(vector<int> &unprocessedPoints, int *runningCluster,
                        int *d_cluster, int *d_seedList, int *d_seedLength,
@@ -157,7 +159,7 @@ int main(int argc, char **argv) {
   }
 
   // Dataset preprocessing
-  datasetPreprocessing(importedDataset);
+  // gpuDatasetPreprocessing(importedDataset);
 
   // Get the total count of dataset
   vector<int> unprocessedPoints;
@@ -367,7 +369,7 @@ int main(int argc, char **argv) {
   cudaFree(gpuStop);
 }
 
-void datasetPreprocessing(double *h_dataset) {
+void gpuDatasetPreprocessing(double *h_dataset) {
   /**
    **************************************************************************
    * Dataset preprocessing
@@ -415,6 +417,33 @@ void datasetPreprocessing(double *h_dataset) {
   for (int i = 0; i < DATASET_COUNT; i++) {
     h_dataset[i * DIMENSION] = h_vector1_output[i];
     h_dataset[i * DIMENSION + 1] = h_vector2_output[i];
+  }
+}
+
+void cpuDatasetPreprocessing(double *h_dataset) {
+  for (int i = 0; i < DATASET_COUNT; i++) {
+    for (int j = 0; j < DATASET_COUNT; j++) {
+      if (h_dataset[i * DIMENSION] > h_dataset[j * DIMENSION]) {
+        for (int x = 0; x < DIMENSION; x++) {
+          double temp = h_dataset[i * DIMENSION + x];
+          h_dataset[i * DIMENSION + x] = h_dataset[j * DIMENSION + x];
+          h_dataset[j * DIMENSION + x] = temp;
+        }
+      }
+    }
+  }
+  // Sorting in DIMENSION dimension.
+  for (int i = 0; i < DATASET_COUNT; i++) {
+    for (int j = 0; j < DATASET_COUNT; j++) {
+      if (h_dataset[i * DIMENSION] == h_dataset[j * DIMENSION] &&
+          h_dataset[i * DIMENSION + 1] > h_dataset[j * DIMENSION + 1]) {
+        for (int x = 0; x < DIMENSION; x++) {
+          double temp = h_dataset[i * DIMENSION + x];
+          h_dataset[i * DIMENSION + x] = h_dataset[j * DIMENSION + x];
+          h_dataset[j * DIMENSION + x] = temp;
+        }
+      }
+    }
   }
 }
 

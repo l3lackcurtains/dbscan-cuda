@@ -1,8 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <time.h>
+#include <unistd.h>
+
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -11,7 +12,7 @@
 #include <vector>
 
 // #define DATASET_SIZE 1864620
-#define DATASET_SIZE 10000
+#define DATASET_SIZE 1000
 #define DIMENTION 2
 #define ELIPSON 1.5
 #define MIN_POINTS 4
@@ -72,7 +73,6 @@ class DBSCAN {
 };
 
 int main(int argc, char **argv) {
-
   char inputFname[500];
   if (argc != 2) {
     fprintf(stderr, "Please provide the dataset file path in the arguments\n");
@@ -83,8 +83,7 @@ int main(int argc, char **argv) {
   strcpy(inputFname, argv[1]);
   printf("Using dataset file %s\n", inputFname);
 
-  double **dataset =
-      (double **)malloc(sizeof(double *) * DATASET_SIZE);
+  double **dataset = (double **)malloc(sizeof(double *) * DATASET_SIZE);
   for (long int i = 0; i < DATASET_SIZE; i++) {
     dataset[i] = (double *)malloc(sizeof(double) * DIMENTION);
   }
@@ -143,9 +142,9 @@ DBSCAN::DBSCAN(double **loadData) {
 
 double DBSCAN::getDistance(long int center, long int neighbor) {
   double dist = (dataset[center][0] - dataset[neighbor][0]) *
-                         (dataset[center][0] - dataset[neighbor][0]) +
-                     (dataset[center][1] - dataset[neighbor][1]) *
-                         (dataset[center][1] - dataset[neighbor][1]);
+                    (dataset[center][0] - dataset[neighbor][0]) +
+                (dataset[center][1] - dataset[neighbor][1]) *
+                    (dataset[center][1] - dataset[neighbor][1]);
 
   return dist;
 }
