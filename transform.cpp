@@ -11,8 +11,7 @@
 #include <set>
 #include <vector>
 
-#define DATASET_SIZE 1000
-
+#define DATASET_SIZE 10000
 using namespace std;
 
 int importDataset(char const* fname, int N, int* cluster);
