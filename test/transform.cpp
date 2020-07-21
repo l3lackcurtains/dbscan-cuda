@@ -21,8 +21,8 @@ int main() {
   int *clusterData1 = (int *)malloc(sizeof(int) * DATASET_SIZE);
   int *clusterData2 = (int *)malloc(sizeof(int) * DATASET_SIZE);
 
-  importDataset("./cpu_dbscan_output.txt", DATASET_SIZE, clusterData1);
-  importDataset("./gpu_dbscan_output.txt", DATASET_SIZE, clusterData2);
+  importDataset("../out/cpu_dbscan_output.txt", DATASET_SIZE, clusterData1);
+  importDataset("../out/gpu_dbscan_output.txt", DATASET_SIZE, clusterData2);
 
   int max1 = *max_element(clusterData1 , clusterData1 + DATASET_SIZE);
   int max2 = *max_element(clusterData2 , clusterData2 + DATASET_SIZE);

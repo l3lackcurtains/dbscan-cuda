@@ -211,7 +211,7 @@ void DBSCAN::results() {
 
   // Output to file
   ofstream outputFile;
-  outputFile.open("cpu_dbscan_output.txt");
+  outputFile.open("./out/cpu_dbscan_output.txt");
 
   for (int j = 0; j < DATASET_SIZE; j++) {
     outputFile << clusters[j] << endl;

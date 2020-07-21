@@ -22,8 +22,8 @@ int main() {
   int *clusterData1 = (int *)malloc(sizeof(int) * DATASET_SIZE);
   int *clusterData2 = (int *)malloc(sizeof(int) * DATASET_SIZE);
 
-  importDataset("./cpu_dbscan_output.txt", DATASET_SIZE, clusterData1);
-  importDataset("./gpu_dbscan_output.txt", DATASET_SIZE, clusterData2);
+  importDataset("../out/cpu_dbscan_output.txt", DATASET_SIZE, clusterData1);
+  importDataset("../out/gpu_dbscan_output.txt", DATASET_SIZE, clusterData2);
 
   vector<int> cls1;
   vector<int> cls2;
